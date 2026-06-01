@@ -7,11 +7,17 @@ no ERP **Omie** (Filial 002). Roda automaticamente via GitHub Actions.
 
 ```
 ESTOCA (WMS)  →  OMIE (ERP, Filial 002)  →  VNDA (loja)
-   le estoque       grava ajuste              etapa separada*
+   le estoque       grava ajuste              atualiza sozinho
+   [este script] →  [este script]            [integracao nativa Omie↔Vnda]
 ```
 
-\* A propagacao Omie → Vnda nao faz parte deste projeto. Verificar se ja
-ocorre por integracao nativa do Omie ou se precisa de processo proprio.
+O estoque real vem da **Estoca** (armazem), este script grava o ajuste no
+**Omie** (Filial 002), e o **Omie propaga automaticamente para a Vnda** pela
+integracao nativa de e-commerce do Omie. Ou seja: este projeto cobre a etapa
+Estoca → Omie; a etapa Omie → Vnda acontece em cascata, sem codigo proprio.
+
+Importante: como a Vnda atualiza em cascata, qualquer ajuste de estoque feito
+por este script reflete na loja. Validar os primeiros disparos com cuidado.
 
 ## Estrutura
 
@@ -65,7 +71,7 @@ linhas `cron` em `.github/workflows/sync-estoque.yml`.
 - [ ] Obter `API_KEY_ESTOCA` e `WAREHOUSE` (chamado aberto na Estoca).
 - [ ] Validar se a lista de SKUs em `utils/ConsultaEstoca.py` esta atualizada.
 - [ ] Testar fluxo completo apos receber as credenciais.
-- [ ] Definir/verificar a etapa Omie → Vnda.
+- [ ] Confirmar que o ajuste no Omie reflete corretamente na Vnda (cascata nativa).
 - [ ] Avaliar alerta de falha (email/mensagem) ao fim da execucao.
 
 ## Seguranca

@@ -1,0 +1,37 @@
+name: Sincronizar Estoque (Estoca -> Omie Filial 002)
+
+on:
+  schedule:
+    # Horarios em UTC. Sao Paulo = UTC-3.
+    # 09:00 UTC = 06:00 SP | 15:00 UTC = 12:00 SP | 21:00 UTC = 18:00 SP
+    - cron: '0 9 * * *'
+    - cron: '0 15 * * *'
+    - cron: '0 21 * * *'
+  workflow_dispatch: {}   # botao "Run workflow" para rodar manualmente
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Rodar sincronizacao
+        env:
+          BASE_URL_ESTOCA: ${{ secrets.BASE_URL_ESTOCA }}
+          ESTOCA_ENDPOINT: ${{ secrets.ESTOCA_ENDPOINT }}
+          API_KEY_ESTOCA: ${{ secrets.API_KEY_ESTOCA }}
+          WAREHOUSE: ${{ secrets.WAREHOUSE }}
+          OMIE_PRODUTO_URL: ${{ secrets.OMIE_PRODUTO_URL }}
+          OMIE_ESTOQUE_URL: ${{ secrets.OMIE_ESTOQUE_URL }}
+          APP_KEY_OMIE: ${{ secrets.APP_KEY_OMIE }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: python main.py

@@ -1,0 +1,20 @@
+# Ambiente / segredos
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.cache/
+env/
+venv/
+.venv/
+
+# SO
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

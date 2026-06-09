@@ -1,0 +1,28 @@
+name: TESTE - Leitura Estoca (somente leitura)
+
+# Sem agendamento: roda apenas quando voce clica em "Run workflow".
+on:
+  workflow_dispatch: {}
+
+jobs:
+  teste-leitura:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Rodar teste de leitura (NAO grava no Omie)
+        env:
+          BASE_URL_ESTOCA: ${{ secrets.BASE_URL_ESTOCA }}
+          ESTOCA_ENDPOINT: ${{ secrets.ESTOCA_ENDPOINT }}
+          API_KEY_ESTOCA: ${{ secrets.API_KEY_ESTOCA }}
+          WAREHOUSE: ${{ secrets.WAREHOUSE }}
+        run: python teste_leitura.py

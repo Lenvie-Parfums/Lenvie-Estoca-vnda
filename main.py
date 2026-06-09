@@ -1,4 +1,5 @@
 import logging
+import time
 from utils.ConsultaEstoca import rodarAPIEstoca
 from utils.AtualizaOmie import (
     consultar_produto_omie,
@@ -54,6 +55,9 @@ def atualizar_todos_estoques():
             ok += 1
         else:
             falhas += 1
+
+        # Respiro entre gravacoes para nao acionar a protecao anti-spam do Omie.
+        time.sleep(2)
 
     # 2. Resumo final da execucao.
     log.info("=" * 60)

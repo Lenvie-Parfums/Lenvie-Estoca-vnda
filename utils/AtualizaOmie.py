@@ -3,10 +3,22 @@ import json
 import os
 import time
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv()
 log = logging.getLogger(__name__)
+
+# Fuso de Sao Paulo. O servidor do GitHub Actions roda em UTC, entao a data
+# precisa ser calculada no fuso do Brasil — senao o Omie recusa o ajuste com
+# "Data do Movimento nao pode ser maior que a data atual".
+TZ_SP = ZoneInfo("America/Sao_Paulo")
+
+
+def data_hoje_sp():
+    """Retorna a data de hoje no fuso de Sao Paulo, formato dd/mm/aaaa."""
+    return datetime.now(TZ_SP).strftime("%d/%m/%Y")
 
 OMIE_PRODUTO_URL = os.getenv("OMIE_PRODUTO_URL")
 OMIE_ESTOQUE_URL = os.getenv("OMIE_ESTOQUE_URL")
@@ -86,7 +98,7 @@ def atualizar_estoque_omie(codigo_produto, quan, sku, obs="Ajuste automático po
     """
     Atualiza o estoque do produto no Omie.
     """
-    hoje = time.strftime("%d/%m/%Y")
+    hoje = data_hoje_sp()
 
     payload = {
         "call": "IncluirAjusteEstoque",
@@ -116,20 +128,32 @@ def atualizar_estoque_omie(codigo_produto, quan, sku, obs="Ajuste automático po
                 timeout=60
             )
 
-            if response.status_code == 429:
-                log.warning(f"[{sku}] Rate limit no ajuste. Tentativa {tentativa}. Esperando {retry_delay}s...")
-                time.sleep(retry_delay)
+            if response.status_code == 200:
+                resp_txt = response.text
+                # O Omie as vezes responde 200 mas com faultstring de erro.
+                if "faultstring" not in resp_txt:
+                    log.info(f"[{sku}] Estoque atualizado com sucesso! id_prod={codigo_produto}, quantidade={quan}")
+                    return True
+
+            texto = response.text
+
+            # Erro de DADOS (ex: data invalida): repetir nao resolve. Para na hora.
+            if "Data do Movimento" in texto or "Client-101" in texto:
+                log.error(f"[{sku}] Erro de dados (nao adianta repetir): {texto}")
+                return False
+
+            # API bloqueada / consumo redundante: respeita o tempo pedido pelo Omie.
+            if "REDUNDANT" in texto or "MISUSE_API" in texto or response.status_code in (425, 429):
+                espera = 60
+                log.warning(f"[{sku}] API limitada/bloqueada. Tentativa {tentativa}. Esperando {espera}s...")
+                time.sleep(espera)
                 tentativa += 1
                 continue
 
-            if response.status_code != 200:
-                log.warning(f"[{sku}] Erro {response.status_code}: {response.text}")
-                time.sleep(retry_delay)
-                tentativa += 1
-                continue
-
-            log.info(f"[{sku}] Estoque atualizado com sucesso! id_prod={codigo_produto}, quantidade={quan}")
-            return True
+            log.warning(f"[{sku}] Erro {response.status_code}: {texto}")
+            time.sleep(retry_delay)
+            tentativa += 1
+            continue
 
         except requests.exceptions.RequestException as e:
             log.warning(f"[{sku}] Falha de conexão: {e}. Tentativa {tentativa}. Retentando em {retry_delay}s...")
@@ -144,7 +168,7 @@ def atualizar_estoque_kit(codigo_produto, quan, sku, obs="Ajuste automático por
     """
     Atualiza o estoque do kit no Omie.
     """
-    hoje = time.strftime("%d/%m/%Y")
+    hoje = data_hoje_sp()
 
     payload = {
         "call": "IncluirAjusteEstoque",

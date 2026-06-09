@@ -1,0 +1,33 @@
+name: TESTE - Gravacao Omie (4 PA apenas)
+
+# Sem agendamento: roda apenas quando voce clica em "Run workflow".
+# ATENCAO: este workflow GRAVA no Omie (so para os 4 PA de teste).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  teste-gravacao:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Rodar teste de gravacao (grava 4 PA no Omie)
+        env:
+          BASE_URL_ESTOCA: ${{ secrets.BASE_URL_ESTOCA }}
+          ESTOCA_ENDPOINT: ${{ secrets.ESTOCA_ENDPOINT }}
+          API_KEY_ESTOCA: ${{ secrets.API_KEY_ESTOCA }}
+          WAREHOUSE: ${{ secrets.WAREHOUSE }}
+          OMIE_PRODUTO_URL: ${{ secrets.OMIE_PRODUTO_URL }}
+          OMIE_ESTOQUE_URL: ${{ secrets.OMIE_ESTOQUE_URL }}
+          APP_KEY_OMIE: ${{ secrets.APP_KEY_OMIE }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: python teste_gravacao.py

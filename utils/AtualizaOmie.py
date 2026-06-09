@@ -8,8 +8,6 @@ from dotenv import load_dotenv
 load_dotenv()
 log = logging.getLogger(__name__)
 
-# Credenciais da empresa Omie de destino (Filial 002).
-# Os valores reais ficam no .env (local) e nos Secrets do GitHub (producao).
 OMIE_PRODUTO_URL = os.getenv("OMIE_PRODUTO_URL")
 OMIE_ESTOQUE_URL = os.getenv("OMIE_ESTOQUE_URL")
 APP_KEY = os.getenv("APP_KEY_OMIE")
@@ -26,7 +24,8 @@ SKUS_KITS = {
     "14090020",	"14097920",	
     "14098020",	"14012020",	
     "10408470", "10137474",	
-    "10139274",	"10134074",	
+    "10139274",	"10134074",
+    "102026380","102059380",
 }
 
 def consultar_produto_omie(codigo, max_retries=3, retry_delay=10, request_delay=3):
@@ -79,7 +78,7 @@ def consultar_produto_omie(codigo, max_retries=3, retry_delay=10, request_delay=
             time.sleep(retry_delay)
             tentativa += 1
 
-    log.warning(f"[{codigo}] Falha definitiva após {max_retries} tentativas.")
+    log.error(f"[{codigo}] Falha definitiva após {max_retries} tentativas.")
     return None
 
 
@@ -158,7 +157,7 @@ def atualizar_estoque_kit(codigo_produto, quan, sku, obs="Ajuste automático por
                 "quan": str(quan),
                 "obs": obs,
                 "origem": "AJU",
-                "tipo": "ENT",
+                "tipo": "SLD",
                 "motivo": "INV",
                 "valor": 0
             }

@@ -1,11 +1,7 @@
 import logging
 import time
 from utils.ConsultaEstoca import rodarAPIEstoca
-from utils.AtualizaOmie import (
-    consultar_produto_omie,
-    atualizar_estoque_omie,
-    SKUS_KITS,
-)
+from utils.AtualizaOmie import consultar_produto_omie, atualizar_estoque_omie
 
 # Logging aparece no terminal local e nos logs do GitHub Actions.
 logging.basicConfig(
@@ -16,40 +12,34 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ==========================================================
-# FASE 1: sincroniza apenas Produtos Acabados (PA).
-# Kits NAO sao gravados no Omie por enquanto — apenas listados
-# no log para acompanhamento. A regra de estoque dos kits (que
-# usam 2 ou 3 unidades de itens PA) sera tratada na Fase 2.
+# Repassa o estoque da Estoca para o Omie, sem distincao.
+# A Estoca e a fonte da verdade: o valor 'available' de cada
+# SKU e gravado como SALDO (SLD) no Omie, exatamente como vem.
+# O Omie entao propaga para o site (Vnda).
 # ==========================================================
 
 
 def atualizar_todos_estoques():
-    # 1. Le o estoque disponivel na Estoca (fonte real do armazem).
+    # 1. Le o estoque disponivel na Estoca.
     skus_disponiveis = rodarAPIEstoca()
     total = len(skus_disponiveis)
     log.info(f"Total de produtos recebidos da Estoca: {total}")
 
     ok = falhas = nao_encontrados = 0
-    kits_pulados = []  # guarda (sku, available) dos kits ignorados nesta fase
 
     for produto in skus_disponiveis:
         sku = produto["sku"]
         available = produto["available"]
 
-        # --- KIT: nao grava nesta fase, apenas registra ---
-        if sku in SKUS_KITS:
-            log.info(f"[KIT] {sku} -> available {available} | NAO gravado (Fase 1)")
-            kits_pulados.append((sku, available))
-            continue
-
-        # --- PA: fluxo normal de sincronizacao ---
+        # 2. Busca o id interno do produto no Omie.
         codigo_produto = consultar_produto_omie(sku)
         if not codigo_produto:
             log.warning(f"SKU {sku} nao encontrado no Omie. Pulando...")
             nao_encontrados += 1
             continue
 
-        log.info(f"[PA] {sku} -> available {available} | gravando saldo no Omie")
+        # 3. Grava o saldo no Omie, repassando o available cru da Estoca.
+        log.info(f"{sku} -> gravando saldo {available} no Omie")
         sucesso = atualizar_estoque_omie(codigo_produto, available, sku)
         if sucesso:
             ok += 1
@@ -59,28 +49,20 @@ def atualizar_todos_estoques():
         # Respiro entre gravacoes para nao acionar a protecao anti-spam do Omie.
         time.sleep(2)
 
-    # 2. Resumo final da execucao.
+    # 4. Resumo final.
     log.info("=" * 60)
-    log.info("RESUMO DA EXECUCAO (Fase 1 - apenas PA)")
-    log.info(f"  Recebidos da Estoca:        {total}")
-    log.info(f"  PA atualizados no Omie:     {ok}")
-    log.info(f"  PA com falha:               {falhas}")
-    log.info(f"  PA nao encontrados no Omie: {nao_encontrados}")
-    log.info(f"  Kits ignorados (Fase 1):    {len(kits_pulados)}")
+    log.info("RESUMO DA EXECUCAO")
+    log.info(f"  Recebidos da Estoca:     {total}")
+    log.info(f"  Atualizados no Omie:     {ok}")
+    log.info(f"  Falhas:                  {falhas}")
+    log.info(f"  Nao encontrados no Omie: {nao_encontrados}")
     log.info("=" * 60)
-
-    if kits_pulados:
-        log.info("Kits NAO gravados nesta fase (sku -> available):")
-        for sku, avail in kits_pulados:
-            log.info(f"    {sku} -> {avail}")
-        log.info("=" * 60)
 
     return {
         "total": total,
         "ok": ok,
         "falhas": falhas,
         "nao_encontrados": nao_encontrados,
-        "kits_pulados": kits_pulados,
     }
 
 

@@ -47,7 +47,7 @@ def atualizar_todos_estoques():
             falhas += 1
 
         # Respiro entre gravacoes para nao acionar a protecao anti-spam do Omie.
-        time.sleep(2)
+        time.sleep(1)
 
     # 4. Resumo final.
     log.info("=" * 60)

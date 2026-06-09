@@ -40,7 +40,7 @@ SKUS_KITS = {
     "102026380","102059380",
 }
 
-def consultar_produto_omie(codigo, max_retries=3, retry_delay=10, request_delay=3):
+def consultar_produto_omie(codigo, max_retries=3, retry_delay=10, request_delay=1):
     """
     Consulta o produto no Omie pelo código (SKU).
     Retorna o id_prod se encontrado, ou None se nunca existir no Omie.

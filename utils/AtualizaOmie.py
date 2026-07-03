@@ -238,7 +238,7 @@ def atualizar_estoque_kit(codigo_produto, quan_estoca, sku,
             "origem": "AJU",
             "tipo": tipo,
             "motivo": "INV",
-            "valor": 0
+            "valor": 0.01
         }]
     }
     response = _post_omie(OMIE_ESTOQUE_URL, payload, sku, max_retries, retry_delay)

@@ -27,18 +27,20 @@ def atualizar_todos_estoques():
         sku = produto["sku"]
         available = produto["available"]
 
-        codigo_produto = consultar_produto_omie(sku)
+        # ConsultarProduto retorna (codigo_produto, estoque_atual_omie)
+        codigo_produto, estoque_omie_atual = consultar_produto_omie(sku)
         if not codigo_produto:
             log.warning(f"SKU {sku} nao encontrado no Omie. Pulando...")
             nao_encontrados += 1
             continue
 
-        # Kit: usa ENT/SAI com consulta previa do saldo atual
-        # PA:  usa SLD (saldo direto)
         if sku in SKUS_KITS:
-            log.info(f"[KIT] {sku} -> ajustando saldo para {available}")
-            sucesso = atualizar_estoque_kit(codigo_produto, available, sku)
+            # Kit: usa ENT/SAI com saldo atual vindo do ConsultarProduto
+            log.info(f"[KIT] {sku} -> ajustando saldo para {available} (atual no Omie: {estoque_omie_atual})")
+            sucesso = atualizar_estoque_kit(codigo_produto, available, sku,
+                                            estoque_omie_atual=estoque_omie_atual)
         else:
+            # PA: saldo direto (SLD)
             log.info(f"{sku} -> gravando saldo {available} no Omie")
             sucesso = atualizar_estoque_omie(codigo_produto, available, sku)
 

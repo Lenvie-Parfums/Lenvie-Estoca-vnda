@@ -20,10 +20,7 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar dependencias
-        run: pip install -r requisitos.txt
-
-      - name: Criar alias utils para utilitarios
-        run: ln -s "utilitários" utils
+        run: pip install -r requirements.txt
 
       - name: Rodar sincronizacao
         env:

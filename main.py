@@ -1,7 +1,7 @@
 import logging
 import time
-from utilitários.ConsultaEstoca import rodarAPIEstoca
-from utilitários.AtualizaOmie import (
+from utils.ConsultaEstoca import rodarAPIEstoca
+from utils.AtualizaOmie import (
     consultar_produto_omie,
     atualizar_estoque_omie,
     atualizar_estoque_kit,

@@ -2,12 +2,10 @@ name: Sincronizar Estoque (Estoca -> Omie Filial 002)
 
 on:
   schedule:
-    # Horarios em UTC. Sao Paulo = UTC-3.
-    # 09:00 UTC = 06:00 SP | 15:00 UTC = 12:00 SP | 21:00 UTC = 18:00 SP
     - cron: '0 9 * * *'
     - cron: '0 15 * * *'
     - cron: '0 21 * * *'
-  workflow_dispatch: {}   # botao "Run workflow" para rodar manualmente
+  workflow_dispatch: {}
 
 jobs:
   sync:
@@ -22,7 +20,10 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar dependencias
-        run: pip install -r requirements.txt
+        run: pip install -r requisitos.txt
+
+      - name: Criar alias utils para utilitarios
+        run: ln -s "utilitários" utils
 
       - name: Rodar sincronizacao
         env:

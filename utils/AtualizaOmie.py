@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 OMIE_PRODUTO_URL = os.getenv("OMIE_PRODUTO_URL")
 OMIE_ESTOQUE_URL = os.getenv("OMIE_ESTOQUE_URL")
-OMIE_CONSULTA_ESTOQUE_URL = "https://app.omie.com.br/api/v1/estoque/resumo/"
+OMIE_CONSULTA_ESTOQUE_URL = "https://app.omie.com.br/api/v1/estoque/consulta/"
 APP_KEY = os.getenv("APP_KEY_OMIE")
 APP_SECRET = os.getenv("APP_SECRET")
 

@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 OMIE_PRODUTO_URL = os.getenv("OMIE_PRODUTO_URL")
 OMIE_ESTOQUE_URL = os.getenv("OMIE_ESTOQUE_URL")
+OMIE_CONSULTA_ESTOQUE_URL = os.getenv("OMIE_CONSULTA_ESTOQUE_URL")
 APP_KEY = os.getenv("APP_KEY_OMIE")
 APP_SECRET = os.getenv("APP_SECRET")
 
@@ -37,7 +38,6 @@ SKUS_KITS = {
     "KIT66", "KIT67", "KIT68", "KIT69", "KIT70", "KIT05",
     "11800001",
 }
-
 
 def _post_omie(url, payload, sku, max_retries=3, retry_delay=10):
     tentativa = 1
@@ -74,13 +74,32 @@ def _post_omie(url, payload, sku, max_retries=3, retry_delay=10):
 
     return None
 
+def consultar_posicao_estoque(codigo_produto, sku, max_retries=3, retry_delay=10):
+    payload = {
+        "call": "ListarPosEstoque",
+        "app_key": APP_KEY,
+        "app_secret": APP_SECRET,
+        "param": [{
+            "id_prod": codigo_produto,
+            "data_posicao": data_hoje_sp()
+        }]
+    }
+    
+    response = _post_omie(OMIE_CONSULTA_ESTOQUE_URL, payload, sku, max_retries, retry_delay)
+    
+    if response and response.status_code == 200:
+        data = response.json()
+        produtos = data.get("produtos", [])
+        saldo_total = 0.0
+        for prod in produtos:
+            saldo = prod.get("saldo_fisico", 0)
+            saldo_total += float(saldo)
+        return saldo_total
+        
+    log.warning(f"[{sku}] Nao foi possivel obter a posicao real de estoque. Assumindo 0.")
+    return 0.0
 
 def consultar_produto_omie(codigo, max_retries=3, retry_delay=10, request_delay=1):
-    """
-    Consulta o produto no Omie pelo SKU.
-    Retorna (codigo_produto, estoque_atual) ou (None, 0).
-    O estoque_atual e usado pela logica de kit (ENT/SAI).
-    """
     payload = {
         "call": "ConsultarProduto",
         "app_key": APP_KEY,
@@ -120,16 +139,7 @@ def consultar_produto_omie(codigo, max_retries=3, retry_delay=10, request_delay=
                 log.warning(f"[{codigo}] Produto nao encontrado no Omie.")
                 return None, 0
 
-            # Pega o estoque atual do cadastro do produto
-            # O Omie retorna o estoque em "estoque" dentro de informacoes_adicionais
-            # ou direto como "qtde_estoque_disponivel"
-            estoque_atual = 0
-            inf_adic = data.get("informacoes_adicionais", {})
-            qtde = inf_adic.get("qtde_estoque_disponivel", None)
-            if qtde is None:
-                qtde = data.get("qtde_estoque_disponivel", None)
-            if qtde is not None:
-                estoque_atual = float(qtde)
+            estoque_atual = consultar_posicao_estoque(codigo_produto, codigo, max_retries, retry_delay)
 
             time.sleep(request_delay)
             return codigo_produto, estoque_atual
@@ -142,11 +152,9 @@ def consultar_produto_omie(codigo, max_retries=3, retry_delay=10, request_delay=
     log.error(f"[{codigo}] Falha definitiva na consulta apos {max_retries} tentativas.")
     return None, 0
 
-
 def atualizar_estoque_omie(codigo_produto, quan, sku,
                             obs="Ajuste automatico por API",
                             max_retries=3, retry_delay=10):
-    """Atualiza estoque de PA usando SLD (saldo direto)."""
     payload = {
         "call": "IncluirAjusteEstoque",
         "app_key": APP_KEY,
@@ -175,20 +183,9 @@ def atualizar_estoque_omie(codigo_produto, quan, sku,
     log.error(f"[{sku}] Falha: {response.text[:200]}")
     return False
 
-
 def atualizar_estoque_kit(codigo_produto, quan_estoca, sku, estoque_omie_atual=0,
                            obs="Ajuste automatico por API",
                            max_retries=3, retry_delay=10):
-    """
-    Atualiza estoque de Kit no Omie usando ENT ou SAI.
-    O estoque_omie_atual vem do ConsultarProduto, evitando chamada extra de API.
-
-    Logica:
-      diferenca = quan_estoca - estoque_omie_atual
-      > 0 → ENT (entrada da diferenca)
-      < 0 → SAI (saida do absoluto)
-      = 0 → ja correto, nada a fazer
-    """
     saldo_atual = float(estoque_omie_atual)
     diferenca = float(quan_estoca) - saldo_atual
 

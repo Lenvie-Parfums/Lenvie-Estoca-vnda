@@ -123,7 +123,7 @@ def consultar_saldo_por_local(codigo_produto, sku):
         "call": "ListarPosEstoque",
         "app_key": APP_KEY, "app_secret": APP_SECRET,
         "param": [{
-            "codigo_produto": codigo_produto,
+            "nCodProd": codigo_produto,
             "pagina": 1,
             "registros_por_pagina": 50
         }]

@@ -56,7 +56,9 @@ def carregar_locais_estoque():
 
             if response.status_code == 200:
                 data = response.json()
-                locais = data.get("locaisEstoque", [])
+                log.info(f"ListarLocaisEstoque retorno keys: {list(data.keys())}")
+                log.info(f"ListarLocaisEstoque retorno completo: {json.dumps(data)[:500]}")
+                locais = data.get("locaisEstoque", data.get("lista_locais_estoque", []))
                 for local in locais:
                     cod  = local.get("nCodLocalEstoque")
                     nome = str(local.get("cCodigo", "")).strip().upper()

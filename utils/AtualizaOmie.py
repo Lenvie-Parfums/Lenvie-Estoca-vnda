@@ -231,7 +231,7 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
     """
     Atualiza PA com dois locais:
     - Disponível → PADRAO (SLD)
-    - Bloqueado  → QUARENTENA (ENT/SAI)
+    - Bloqueado  → QUARENTENA (SLD direto, sem consultar saldo atual)
     """
     # 1. Atualiza PADRAO via SLD
     ok_padrao = _ajustar_local(
@@ -241,21 +241,34 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
         max_retries=max_retries, retry_delay=retry_delay
     )
 
-    # 2. Atualiza QUARENTENA via ENT/SAI se tiver bloqueado
+    # 2. Atualiza QUARENTENA via SLD (sem ListarPosEstoque)
     ok_quar = True
-    if quan_bloqueado > 0 or True:  # sempre verifica pra poder zerar também
-        cod_quar = obter_codigo_local("QUARENTENA")
-        if cod_quar:
-            saldos = consultar_saldo_por_local(codigo_produto, sku)
-            saldo_quar = saldos.get(cod_quar, 0)
-            ok_quar = _ajustar_local(
-                codigo_produto, sku, quan_bloqueado,
-                codigo_local=cod_quar, nome_local="QUARENTENA",
-                saldo_atual=saldo_quar, tipo_ajuste_kit="PA",
-                max_retries=max_retries, retry_delay=retry_delay
-            )
+    cod_quar = obter_codigo_local("QUARENTENA")
+    if cod_quar:
+        log.info(f"[{sku}] QUARENTENA: gravando saldo {quan_bloqueado} via SLD")
+        payload = {
+            "call": "IncluirAjusteEstoque",
+            "app_key": APP_KEY, "app_secret": APP_SECRET,
+            "param": [{
+                "id_prod": codigo_produto,
+                "data": data_hoje_sp(),
+                "quan": str(int(float(quan_bloqueado))),
+                "obs": "Ajuste automatico por API",
+                "origem": "AJU",
+                "tipo": "SLD",
+                "motivo": "INV",
+                "valor": 0,
+                "codigo_local_estoque": cod_quar
+            }]
+        }
+        response = _post_omie(OMIE_ESTOQUE_URL, payload, sku, max_retries, retry_delay)
+        if response and response.status_code == 200 and "faultstring" not in response.text:
+            log.info(f"[{sku}] QUARENTENA atualizada! alvo={quan_bloqueado}")
         else:
-            log.warning(f"[{sku}] Codigo do local QUARENTENA nao encontrado.")
+            log.warning(f"[{sku}] QUARENTENA falhou: {response.text[:150] if response else 'sem resposta'}")
+            ok_quar = False
+    else:
+        log.warning(f"[{sku}] Codigo do local QUARENTENA nao encontrado.")
 
     return ok_padrao and ok_quar
 

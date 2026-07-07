@@ -3,8 +3,9 @@ import time
 from utils.ConsultaEstoca import rodarAPIEstoca
 from utils.AtualizaOmie import (
     consultar_produto_omie,
-    atualizar_estoque_omie,
+    atualizar_estoque_omie_com_bloqueado,
     atualizar_estoque_kit,
+    carregar_locais_estoque,
     SKUS_KITS,
 )
 
@@ -17,6 +18,11 @@ log = logging.getLogger(__name__)
 
 
 def atualizar_todos_estoques():
+    # Carrega locais de estoque uma vez no início
+    log.info("Carregando locais de estoque do Omie...")
+    locais = carregar_locais_estoque()
+    log.info(f"Locais carregados: {locais}")
+
     skus_disponiveis = rodarAPIEstoca()
     total = len(skus_disponiveis)
     log.info(f"Total de produtos recebidos da Estoca: {total}")
@@ -24,25 +30,24 @@ def atualizar_todos_estoques():
     ok = falhas = nao_encontrados = 0
 
     for produto in skus_disponiveis:
-        sku = produto["sku"]
-        available = produto["available"]
+        sku        = produto["sku"]
+        available  = produto["available"]   # Disponível → PADRAO
+        bloqueado  = produto.get("blocked", 0)  # Bloqueado → QUARENTENA
 
-        # ConsultarProduto retorna (codigo_produto, estoque_atual_omie)
-        codigo_produto, estoque_omie_atual = consultar_produto_omie(sku)
+        codigo_produto = consultar_produto_omie(sku)
         if not codigo_produto:
             log.warning(f"SKU {sku} nao encontrado no Omie. Pulando...")
             nao_encontrados += 1
             continue
 
         if sku in SKUS_KITS:
-            # Kit: usa ENT/SAI com saldo atual vindo do ConsultarProduto
-            log.info(f"[KIT] {sku} -> ajustando saldo para {available} (atual no Omie: {estoque_omie_atual})")
-            sucesso = atualizar_estoque_kit(codigo_produto, available, sku,
-                                            estoque_omie_atual=estoque_omie_atual)
+            log.info(f"[KIT] {sku} -> ajustando para {available} (total Estoca)")
+            sucesso = atualizar_estoque_kit(codigo_produto, available, sku)
         else:
-            # PA: saldo direto (SLD)
-            log.info(f"{sku} -> gravando saldo {available} no Omie")
-            sucesso = atualizar_estoque_omie(codigo_produto, available, sku)
+            log.info(f"{sku} -> PADRAO={available} | QUARENTENA={bloqueado}")
+            sucesso = atualizar_estoque_omie_com_bloqueado(
+                codigo_produto, available, bloqueado, sku
+            )
 
         if sucesso:
             ok += 1

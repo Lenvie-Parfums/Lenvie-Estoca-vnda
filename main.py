@@ -35,7 +35,7 @@ def carregar_locais_estoque():
     if _cache_locais:
         return _cache_locais
 
-    for tentativa in range(1, 4):
+    for tentativa in range(1, 6):
         payload = {
             "call": "ListarLocaisEstoque",
             "app_key": APP_KEY,
@@ -50,27 +50,36 @@ def carregar_locais_estoque():
                 timeout=30
             )
             if "REDUNDANT" in response.text or response.status_code in (425, 429):
-                log.warning(f"ListarLocaisEstoque: bloqueio. Aguardando 60s... (tentativa {tentativa})")
-                time.sleep(60)
+                espera = 65
+                log.warning(f"ListarLocaisEstoque bloqueado. Aguardando {espera}s... (tentativa {tentativa}/5)")
+                time.sleep(espera)
                 continue
 
             if response.status_code == 200:
                 data = response.json()
                 log.info(f"ListarLocaisEstoque retorno keys: {list(data.keys())}")
-                log.info(f"ListarLocaisEstoque retorno completo: {json.dumps(data)[:500]}")
-                locais = data.get("locaisEstoque", data.get("lista_locais_estoque", []))
+                log.info(f"ListarLocaisEstoque retorno: {json.dumps(data)[:600]}")
+                # Tenta diferentes nomes de campo de retorno
+                locais = (data.get("locaisEstoque")
+                       or data.get("lista_locais_estoque")
+                       or data.get("locais_estoque")
+                       or [])
                 for local in locais:
                     cod  = local.get("nCodLocalEstoque")
                     nome = str(local.get("cCodigo", "")).strip().upper()
                     desc = str(local.get("cDescricao", "")).strip().upper()
-                    # Indexa pelo código textual E pela descrição
                     _cache_locais[nome] = cod
                     if desc and desc != nome:
                         _cache_locais[desc] = cod
-                    log.info(f"Local carregado: {cod} = '{nome}' / '{desc}'")
-                break
+                    log.info(f"Local carregado: {cod} | cCodigo='{nome}' | cDescricao='{desc}'")
+                if _cache_locais:
+                    break
+                else:
+                    log.warning("Lista de locais veio vazia — tentando novamente em 10s")
+                    time.sleep(10)
+                    continue
             else:
-                log.warning(f"Erro ao listar locais: {response.text[:200]}")
+                log.warning(f"Erro ao listar locais ({response.status_code}): {response.text[:200]}")
                 break
         except Exception as e:
             log.warning(f"Falha ao carregar locais: {e}")
@@ -81,11 +90,20 @@ def carregar_locais_estoque():
 
 def obter_codigo_local(nome_local):
     """
-    Retorna o codigo numerico do local pelo nome ou descrição.
-    Busca case-insensitive.
+    Retorna o codigo numerico do local pelo nome ou parte do nome.
+    Busca case-insensitive e parcial (contains).
     """
     locais = carregar_locais_estoque()
-    return locais.get(nome_local.strip().upper())
+    busca = nome_local.strip().upper()
+    # Busca exata primeiro
+    if busca in locais:
+        return locais[busca]
+    # Busca parcial — acha "QUARENTENA - QUARANTENA" quando busca "QUAREN"
+    for nome, cod in locais.items():
+        if busca in nome or nome in busca:
+            log.info(f"Local '{busca}' encontrado como '{nome}' (cod={cod})")
+            return cod
+    return None
 
 SKUS_KITS = {
     "101002022","101002021","102022380","102022150","90100001","14093020",

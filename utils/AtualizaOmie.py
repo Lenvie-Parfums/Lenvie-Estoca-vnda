@@ -22,88 +22,22 @@ TZ_SP = ZoneInfo("America/Sao_Paulo")
 def data_hoje_sp():
     return datetime.now(TZ_SP).strftime("%d/%m/%Y")
 
-# Cache dos codigos de locais — carregado uma vez no inicio
-_cache_locais = {}
+# Codigos dos locais de estoque (obtidos via ListarLocaisEstoque em 07/07/2026)
+COD_LOCAL_PADRAO     = 8385256868
+COD_LOCAL_QUARENTENA = 8636432809
+
+_cache_locais = {
+    "PADRAO":     COD_LOCAL_PADRAO,
+    "QUARENTENA": COD_LOCAL_QUARENTENA,
+}
 
 def carregar_locais_estoque():
-    """
-    Carrega os locais de estoque do Omie e armazena em cache.
-    Retorna dict: {nome_upper: codigo_numerico}
-    Inclui retry em caso de bloqueio por consumo redundante.
-    """
-    global _cache_locais
-    if _cache_locais:
-        return _cache_locais
-
-    for tentativa in range(1, 6):
-        payload = {
-            "call": "ListarLocaisEstoque",
-            "app_key": APP_KEY,
-            "app_secret": APP_SECRET,
-            "param": [{"nPagina": 1, "nRegPorPagina": 50}]
-        }
-        try:
-            response = requests.post(
-                OMIE_LOCAL_URL,
-                headers={"Content-Type": "application/json"},
-                data=json.dumps(payload),
-                timeout=30
-            )
-            if "REDUNDANT" in response.text or response.status_code in (425, 429):
-                espera = 65
-                log.warning(f"ListarLocaisEstoque bloqueado. Aguardando {espera}s... (tentativa {tentativa}/5)")
-                time.sleep(espera)
-                continue
-
-            if response.status_code == 200:
-                data = response.json()
-                log.info(f"ListarLocaisEstoque retorno keys: {list(data.keys())}")
-                log.info(f"ListarLocaisEstoque retorno: {json.dumps(data)[:600]}")
-                # Tenta diferentes nomes de campo de retorno
-                locais = (data.get("locaisEstoque")
-                       or data.get("lista_locais_estoque")
-                       or data.get("locais_estoque")
-                       or [])
-                for local in locais:
-                    cod  = local.get("nCodLocalEstoque")
-                    nome = str(local.get("cCodigo", "")).strip().upper()
-                    desc = str(local.get("cDescricao", "")).strip().upper()
-                    _cache_locais[nome] = cod
-                    if desc and desc != nome:
-                        _cache_locais[desc] = cod
-                    log.info(f"Local carregado: {cod} | cCodigo='{nome}' | cDescricao='{desc}'")
-                if _cache_locais:
-                    break
-                else:
-                    log.warning("Lista de locais veio vazia — tentando novamente em 10s")
-                    time.sleep(10)
-                    continue
-            else:
-                log.warning(f"Erro ao listar locais ({response.status_code}): {response.text[:200]}")
-                break
-        except Exception as e:
-            log.warning(f"Falha ao carregar locais: {e}")
-            break
-
+    """Retorna o cache de locais (já pré-carregado com os codigos fixos)."""
     return _cache_locais
 
-
 def obter_codigo_local(nome_local):
-    """
-    Retorna o codigo numerico do local pelo nome ou parte do nome.
-    Busca case-insensitive e parcial (contains).
-    """
-    locais = carregar_locais_estoque()
-    busca = nome_local.strip().upper()
-    # Busca exata primeiro
-    if busca in locais:
-        return locais[busca]
-    # Busca parcial — acha "QUARENTENA - QUARANTENA" quando busca "QUAREN"
-    for nome, cod in locais.items():
-        if busca in nome or nome in busca:
-            log.info(f"Local '{busca}' encontrado como '{nome}' (cod={cod})")
-            return cod
-    return None
+    """Retorna o codigo numerico do local pelo nome."""
+    return _cache_locais.get(nome_local.strip().upper())
 
 SKUS_KITS = {
     "101002022","101002021","102022380","102022150","90100001","14093020",

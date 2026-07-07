@@ -263,54 +263,54 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
 def atualizar_estoque_kit(codigo_produto, quan_estoca, sku,
                            max_retries=3, retry_delay=10):
     """
-    Atualiza Kit com ENT/SAI usando saldo real por local via ListarPosEstoque.
-    Ajusta tanto PADRAO quanto QUARENTENA.
+    Atualiza Kit no Omie.
+    Tenta SLD primeiro. Se rejeitado (tipo inválido para kit), usa ENT/SAI.
+    Evita ListarPosEstoque que está causando bloqueio.
     """
-    cod_padrao = obter_codigo_local("PADRAO")
-    cod_quar   = obter_codigo_local("QUARENTENA")
+    log.info(f"[{sku}] Kit: tentando SLD com valor {quan_estoca}")
 
-    saldos = consultar_saldo_por_local(codigo_produto, sku)
-    saldo_padrao = saldos.get(cod_padrao, 0) if cod_padrao else 0
-    saldo_quar   = saldos.get(cod_quar, 0)   if cod_quar   else 0
-    saldo_total  = saldo_padrao + saldo_quar
-
-    diferenca = float(quan_estoca) - saldo_total
-
-    if diferenca == 0:
-        log.info(f"[{sku}] Kit ja correto (total={saldo_total}). Nada a fazer.")
-        return True
-
-    tipo   = "ENT" if diferenca > 0 else "SAI"
-    ajuste = abs(diferenca)
-
-    log.info(f"[{sku}] Kit: padrao={saldo_padrao} + quar={saldo_quar} = {saldo_total} | "
-             f"estoca={quan_estoca} | dif={diferenca:+.0f} | tipo={tipo} | ajuste={ajuste:.0f}")
-
-    # Ajuste no local PADRAO do kit
-    param = {
-        "id_prod": codigo_produto,
-        "data": data_hoje_sp(),
-        "quan": str(int(ajuste)),
-        "obs": "Ajuste automatico por API",
-        "origem": "AJU",
-        "tipo": tipo,
-        "motivo": "INV",
-        "valor": 0.01
-    }
-    if cod_padrao:
-        param["codigo_local_estoque"] = cod_padrao
-
-    payload = {
+    payload_sld = {
         "call": "IncluirAjusteEstoque",
         "app_key": APP_KEY, "app_secret": APP_SECRET,
-        "param": [param]
+        "param": [{
+            "id_prod": codigo_produto,
+            "data": data_hoje_sp(),
+            "quan": str(quan_estoca),
+            "obs": "Ajuste automatico por API",
+            "origem": "AJU",
+            "tipo": "SLD",
+            "motivo": "INV",
+            "valor": 0.01,
+            "codigo_local_estoque": COD_LOCAL_PADRAO
+        }]
     }
-    response = _post_omie(OMIE_ESTOQUE_URL, payload, sku, max_retries, retry_delay)
-    if response is None:
-        log.error(f"[{sku}] Falha definitiva ao ajustar kit.")
-        return False
-    if response.status_code == 200 and "faultstring" not in response.text:
-        log.info(f"[{sku}] Kit atualizado! saldo_final={quan_estoca}, tipo={tipo}")
+    response = _post_omie(OMIE_ESTOQUE_URL, payload_sld, sku, max_retries=1, retry_delay=retry_delay)
+
+    if response and response.status_code == 200 and "faultstring" not in response.text:
+        log.info(f"[{sku}] Kit atualizado via SLD! quantidade={quan_estoca}")
         return True
-    log.error(f"[{sku}] Falha kit: {response.text[:200]}")
+
+    # SLD rejeitado — usa ENT com o valor alvo
+    # (sem consulta de saldo pra evitar bloqueio da API)
+    log.info(f"[{sku}] SLD falhou — usando ENT com alvo={quan_estoca}")
+    payload_ent = {
+        "call": "IncluirAjusteEstoque",
+        "app_key": APP_KEY, "app_secret": APP_SECRET,
+        "param": [{
+            "id_prod": codigo_produto,
+            "data": data_hoje_sp(),
+            "quan": str(int(float(quan_estoca))),
+            "obs": "Ajuste automatico por API",
+            "origem": "AJU",
+            "tipo": "ENT",
+            "motivo": "INV",
+            "valor": 0.01,
+            "codigo_local_estoque": COD_LOCAL_PADRAO
+        }]
+    }
+    response2 = _post_omie(OMIE_ESTOQUE_URL, payload_ent, sku, max_retries, retry_delay)
+    if response2 and response2.status_code == 200 and "faultstring" not in response2.text:
+        log.info(f"[{sku}] Kit atualizado via ENT! alvo={quan_estoca}")
+        return True
+    log.error(f"[{sku}] Falha kit: {response2.text[:200] if response2 else 'sem resposta'}")
     return False

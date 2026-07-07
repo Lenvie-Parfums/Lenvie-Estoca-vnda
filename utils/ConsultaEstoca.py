@@ -6,7 +6,9 @@ load_dotenv()
 
 
 def rodarAPIEstoca():
-    BASE_URL = os.getenv("BASE_URL_ESTOCA")
+    BASE_URL = os.getenv("BASE_URL_ESTOCA", "").rstrip("/")
+    ENDPOINT = os.getenv("ESTOCA_ENDPOINT", "/inventories")
+    URL = BASE_URL + ENDPOINT
     API_KEY = os.getenv("API_KEY_ESTOCA")
     WAREHOUSE = os.getenv("WAREHOUSE")
     HEADERS = {
@@ -33,7 +35,7 @@ def rodarAPIEstoca():
 
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
-                response = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=10)
+                response = requests.get(URL, headers=HEADERS, params=params, timeout=10)
                 response.raise_for_status()
 
                 dados = response.json()

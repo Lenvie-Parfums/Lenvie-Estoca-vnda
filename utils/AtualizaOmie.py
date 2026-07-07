@@ -122,7 +122,11 @@ def consultar_saldo_por_local(codigo_produto, sku):
     payload = {
         "call": "ListarPosEstoque",
         "app_key": APP_KEY, "app_secret": APP_SECRET,
-        "param": [{"nCodProd": codigo_produto, "pagina": 1, "registros_por_pagina": 50}]
+        "param": [{
+            "codigo_produto": codigo_produto,
+            "pagina": 1,
+            "registros_por_pagina": 50
+        }]
     }
     resultado = {}
     try:
@@ -135,12 +139,13 @@ def consultar_saldo_por_local(codigo_produto, sku):
             data = response.json()
             posicoes = data.get("posicaoEstoque", [])
             for p in posicoes:
-                cod_local = p.get("nCodLocalEstoque")
-                qtde = float(p.get("nQtde", 0))
-                resultado[cod_local] = qtde
-                log.info(f"[{sku}] Local {cod_local}: {qtde} un")
+                cod_local = p.get("nCodLocalEstoque") or p.get("codigo_local_estoque")
+                qtde = float(p.get("nQtde", 0) or p.get("quantidade", 0))
+                if cod_local:
+                    resultado[cod_local] = qtde
+                    log.info(f"[{sku}] Local {cod_local}: {qtde} un")
         else:
-            log.warning(f"[{sku}] ListarPosEstoque falhou: {response.text[:150]}")
+            log.warning(f"[{sku}] ListarPosEstoque falhou: {response.text[:200]}")
     except Exception as e:
         log.warning(f"[{sku}] Erro ao consultar saldo: {e}")
     return resultado

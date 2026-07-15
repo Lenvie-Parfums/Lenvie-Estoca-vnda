@@ -59,7 +59,7 @@ def atualizar_todos_estoques():
             log.info(f"[KIT] {sku} -> ajustando para {available}")
             sucesso = atualizar_estoque_kit(codigo_produto, available, sku)
         else:
-            log.info(f"{sku} -> PADRAO={available} | QUARENTENA={bloqueado}")
+            log.info(f"{sku} -> PADRAO={available} | AVARIAS={bloqueado}")
             sucesso = atualizar_estoque_omie_com_bloqueado(
                 codigo_produto, available, bloqueado, sku
             )

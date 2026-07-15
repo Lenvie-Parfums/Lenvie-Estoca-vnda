@@ -23,12 +23,12 @@ def data_hoje_sp():
     return datetime.now(TZ_SP).strftime("%d/%m/%Y")
 
 # Codigos dos locais de estoque (obtidos via ListarLocaisEstoque em 07/07/2026)
-COD_LOCAL_PADRAO     = 8385256868
-COD_LOCAL_QUARENTENA = 8636432809
+COD_LOCAL_PADRAO   = 8385256868
+COD_LOCAL_AVARIAS  = 8980234760  # 0002_AVARIA (codigo: 99CTRL000201)
 
 _cache_locais = {
-    "PADRAO":     COD_LOCAL_PADRAO,
-    "QUARENTENA": COD_LOCAL_QUARENTENA,
+    "PADRAO":  COD_LOCAL_PADRAO,
+    "AVARIAS": COD_LOCAL_AVARIAS,
 }
 
 def carregar_locais_estoque():
@@ -156,7 +156,7 @@ def _ajustar_local(codigo_produto, sku, quan_alvo, codigo_local, nome_local,
     """
     Ajusta o estoque de um produto num local específico.
     - PA: usa SLD (saldo direto) — sem codigo_local_estoque (vai pro local padrão)
-    - Kit no local QUARENTENA: usa ENT/SAI calculando diferença
+    - Kit no local AVARIAS: usa ENT/SAI calculando diferença
     - Kit no local PADRAO: usa ENT/SAI calculando diferença
     """
     diferenca = float(quan_alvo) - float(saldo_atual)
@@ -189,7 +189,7 @@ def _ajustar_local(codigo_produto, sku, quan_alvo, codigo_local, nome_local,
         "motivo": "INV",
         "valor": valor
     }
-    # Especifica o local de estoque (QUARENTENA)
+    # Especifica o local de estoque (AVARIAS)
     if codigo_local is not None:
         param["codigo_local_estoque"] = codigo_local
 
@@ -213,7 +213,7 @@ def atualizar_estoque_omie(codigo_produto, quan_disponivel, sku, max_retries=3, 
     """
     Atualiza PA:
     - Disponível Estoca → local PADRAO via SLD
-    - Bloqueado Estoca  → local QUARENTENA via ENT/SAI
+    - Bloqueado Estoca  → local AVARIAS via ENT/SAI
     """
     # SLD no local padrão (não precisa especificar o local)
     return _ajustar_local(
@@ -231,7 +231,7 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
     """
     Atualiza PA com dois locais:
     - Disponível → PADRAO (SLD)
-    - Bloqueado  → QUARENTENA (SLD direto, sem consultar saldo atual)
+    - Bloqueado  → AVARIAS (SLD direto, sem consultar saldo atual)
     """
     # 1. Atualiza PADRAO via SLD
     ok_padrao = _ajustar_local(
@@ -241,11 +241,11 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
         max_retries=max_retries, retry_delay=retry_delay
     )
 
-    # 2. Atualiza QUARENTENA via SLD (sem ListarPosEstoque)
+    # 2. Atualiza AVARIAS via SLD (sem ListarPosEstoque)
     ok_quar = True
-    cod_quar = obter_codigo_local("QUARENTENA")
-    if cod_quar:
-        log.info(f"[{sku}] QUARENTENA: gravando saldo {quan_bloqueado} via SLD")
+    cod_avarias = obter_codigo_local("AVARIAS")
+    if cod_avarias:
+        log.info(f"[{sku}] AVARIAS: gravando saldo {quan_bloqueado} via SLD")
         payload = {
             "call": "IncluirAjusteEstoque",
             "app_key": APP_KEY, "app_secret": APP_SECRET,
@@ -258,17 +258,17 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
                 "tipo": "SLD",
                 "motivo": "INV",
                 "valor": 0,
-                "codigo_local_estoque": cod_quar
+                "codigo_local_estoque": cod_avarias
             }]
         }
         response = _post_omie(OMIE_ESTOQUE_URL, payload, sku, max_retries, retry_delay)
         if response and response.status_code == 200 and "faultstring" not in response.text:
-            log.info(f"[{sku}] QUARENTENA atualizada! alvo={quan_bloqueado}")
+            log.info(f"[{sku}] AVARIAS atualizada! alvo={quan_bloqueado}")
         else:
-            log.warning(f"[{sku}] QUARENTENA falhou: {response.text[:150] if response else 'sem resposta'}")
+            log.warning(f"[{sku}] AVARIAS falhou: {response.text[:150] if response else 'sem resposta'}")
             ok_quar = False
     else:
-        log.warning(f"[{sku}] Codigo do local QUARENTENA nao encontrado.")
+        log.warning(f"[{sku}] Codigo do local AVARIAS nao encontrado.")
 
     return ok_padrao and ok_quar
 

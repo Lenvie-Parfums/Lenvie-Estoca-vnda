@@ -230,23 +230,39 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
                                           max_retries=3, retry_delay=10):
     """
     Atualiza PA com dois locais:
-    - Disponível → PADRAO (SLD)
-    - Bloqueado  → AVARIAS (SLD direto, sem consultar saldo atual)
+    - Disponível → PADRAO (SLD — sempre grava, independente do saldo atual)
+    - Bloqueado  → AVARIAS (SLD direto)
     """
-    # 1. Atualiza PADRAO via SLD
-    ok_padrao = _ajustar_local(
-        codigo_produto, sku, quan_disponivel,
-        codigo_local=None, nome_local="PADRAO",
-        saldo_atual=0, tipo_ajuste_kit=None,
-        max_retries=max_retries, retry_delay=retry_delay
-    )
+    # 1. Atualiza PADRAO via SLD — sempre grava pra garantir consistência
+    log.info(f"[{sku}] PADRAO: gravando saldo {quan_disponivel} via SLD")
+    payload_padrao = {
+        "call": "IncluirAjusteEstoque",
+        "app_key": APP_KEY, "app_secret": APP_SECRET,
+        "param": [{
+            "id_prod": codigo_produto,
+            "data": data_hoje_sp(),
+            "quan": str(int(float(quan_disponivel))),
+            "obs": "Ajuste automatico por API",
+            "origem": "AJU",
+            "tipo": "SLD",
+            "motivo": "INV",
+            "valor": 0
+        }]
+    }
+    response = _post_omie(OMIE_ESTOQUE_URL, payload_padrao, sku, max_retries, retry_delay)
+    if response and response.status_code == 200 and "faultstring" not in response.text:
+        log.info(f"[{sku}] PADRAO atualizado! alvo={quan_disponivel}")
+        ok_padrao = True
+    else:
+        log.error(f"[{sku}] PADRAO falhou: {response.text[:150] if response else 'sem resposta'}")
+        ok_padrao = False
 
-    # 2. Atualiza AVARIAS via SLD (sem ListarPosEstoque)
-    ok_quar = True
+    # 2. Atualiza AVARIAS via SLD
+    ok_avarias = True
     cod_avarias = obter_codigo_local("AVARIAS")
     if cod_avarias:
         log.info(f"[{sku}] AVARIAS: gravando saldo {quan_bloqueado} via SLD")
-        payload = {
+        payload_avarias = {
             "call": "IncluirAjusteEstoque",
             "app_key": APP_KEY, "app_secret": APP_SECRET,
             "param": [{
@@ -261,16 +277,16 @@ def atualizar_estoque_omie_com_bloqueado(codigo_produto, quan_disponivel,
                 "codigo_local_estoque": cod_avarias
             }]
         }
-        response = _post_omie(OMIE_ESTOQUE_URL, payload, sku, max_retries, retry_delay)
-        if response and response.status_code == 200 and "faultstring" not in response.text:
+        response2 = _post_omie(OMIE_ESTOQUE_URL, payload_avarias, sku, max_retries, retry_delay)
+        if response2 and response2.status_code == 200 and "faultstring" not in response2.text:
             log.info(f"[{sku}] AVARIAS atualizada! alvo={quan_bloqueado}")
         else:
-            log.warning(f"[{sku}] AVARIAS falhou: {response.text[:150] if response else 'sem resposta'}")
-            ok_quar = False
+            log.warning(f"[{sku}] AVARIAS falhou: {response2.text[:150] if response2 else 'sem resposta'}")
+            ok_avarias = False
     else:
         log.warning(f"[{sku}] Codigo do local AVARIAS nao encontrado.")
 
-    return ok_padrao and ok_quar
+    return ok_padrao and ok_avarias
 
 
 def atualizar_estoque_kit(codigo_produto, quan_estoca, sku,
